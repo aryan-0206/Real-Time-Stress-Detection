@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Time Stress Detection</title>
+  <meta name="description" content="AI-powered real-time stress detection using facial landmark analysis. Detects Calm, Mild, and High stress levels from your webcam." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── Reset & Base ────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:         #0a0e1a;
+      --bg2:        #0f1525;
+      --glass:      rgba(255,255,255,0.04);
+      --glass-b:    rgba(255,255,255,0.08);
+      --calm:       #22c55e;
+      --mild:       #f59e0b;
+      --high:       #ef4444;
+      --accent:     #6366f1;
+      --accent2:    #8b5cf6;
+      --text:       #e2e8f0;
+      --text-muted: #64748b;
+      --radius:     16px;
+      --radius-sm:  8px;
+      --shadow:     0 8px 32px rgba(0,0,0,0.4);
+    }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      overflow: hidden;
+    }
+
+    /* ── Layout ──────────────────────────────────────────────────────── */
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      grid-template-rows: 56px 1fr;
+      height: 100vh;
+      gap: 0;
+    }
+
+    /* ── Header ──────────────────────────────────────────────────────── */
+    .header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: var(--bg2);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.3px;
+    }
+    .logo-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%,100% { transform: scale(1); opacity:1; }
+      50%      { transform: scale(1.3); opacity:.7; }
+    }
+    .header-timer {
+      font-size: .85rem;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    #timer-display { color: var(--text); font-weight: 600; }
+
+    /* ── Video area ──────────────────────────────────────────────────── */
+    .video-area {
+      position: relative;
+      background: #000;
+      overflow: hidden;
+    }
+    #webcam, #overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: cover;
+    }
+    #overlay { pointer-events: none; }
+
+    /* Stress border flash */
+    .video-area::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 0px solid transparent;
+      border-radius: 0;
+      pointer-events: none;
+      transition: border-color .3s, border-width .3s, box-shadow .3s;
+    }
+    .video-area.stress-high::after {
+      border: 6px solid var(--high);
+      box-shadow: inset 0 0 40px rgba(239,68,68,.35);
+    }
+    .video-area.stress-mild::after {
+      border: 4px solid var(--mild);
+      box-shadow: inset 0 0 30px rgba(245,158,11,.2);
+    }
+
+    /* No-camera overlay */
+    .no-cam {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: rgba(10,14,26,.9);
+      font-size: .95rem;
+      color: var(--text-muted);
+    }
+    .no-cam svg { opacity: .4; }
+    .btn-start {
+      padding: 12px 28px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-weight: 600;
+      font-size: .95rem;
+      cursor: pointer;
+      transition: transform .15s, box-shadow .15s;
+    }
+    .btn-start:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(99,102,241,.45); }
+    .btn-start:active { transform: translateY(0); }
+
+    /* ── Sidebar ──────────────────────────────────────────────────────── */
+    .sidebar {
+      background: var(--bg2);
+      border-left: 1px solid rgba(255,255,255,0.06);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 20px 16px 16px;
+      gap: 16px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,.1) transparent;
+    }
+
+    /* Stress badge */
+    .stress-badge {
+      border-radius: var(--radius);
+      padding: 18px;
+      text-align: center;
+      transition: background .4s, box-shadow .4s;
+      background: var(--glass);
+      border: 1px solid var(--glass-b);
+    }
+    .stress-badge.calm  { background: rgba(34,197,94,.12);  border-color: rgba(34,197,94,.3); }
+    .stress-badge.mild  { background: rgba(245,158,11,.12); border-color: rgba(245,158,11,.3); }
+    .stress-badge.high  { background: rgba(239,68,68,.12);  border-color: rgba(239,68,68,.3); }
+    .badge-label {
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .badge-level {
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -1px;
+      transition: color .4s;
+    }
+    .calm  .badge-level { color: var(--calm); }
+    .mild  .badge-level { color: var(--mild); }
+    .high  .badge-level { color: var(--high); }
+    .badge-score {
+      font-size: .8rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    /* No face indicator */
+    .no-face-hint {
+      font-size: .75rem;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 4px 0;
+      opacity: 0;
+      transition: opacity .3s;
+    }
+    .no-face-hint.visible { opacity: 1; }
+
+    /* Section headers */
+    .section-title {
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+
+    /* Metric bars */
+    .metric-list { display: flex; flex-direction: column; gap: 10px; }
+    .metric-row { display: flex; flex-direction: column; gap: 4px; }
+    .metric-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: .78rem;
+    }
+    .metric-name { color: var(--text-muted); }
+    .metric-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .bar-track {
+      height: 6px;
+      border-radius: 99px;
+      background: rgba(255,255,255,.07);
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      width: 0%;
+      transition: width .35s cubic-bezier(.4,0,.2,1), background .35s;
+    }
+    .bar-fill.calm-color { background: var(--calm); }
+    .bar-fill.mild-color { background: var(--mild); }
+    .bar-fill.high-color { background: var(--high); }
+
+    /* History chart */
+    .chart-card {
+      background: var(--glass);
+      border: 1px solid var(--glass-b);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    #history-chart { max-height: 120px; }
+
+    /* Status dot */
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .78rem;
+      color: var(--text-muted);
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background .3s;
+    }
+    .status-dot.live { background: var(--calm); box-shadow: 0 0 6px var(--calm); animation: pulse-dot 2s infinite; }
+    .status-dot.error { background: var(--high); }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      padding: 10px 0 4px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: .75rem;
+      color: var(--text-muted);
+    }
+    .legend-dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-logo">
+      <div class="logo-dot"></div>
+      Real-Time Stress Detection
+    </div>
+    <div class="header-timer">
+      Session: <span id="timer-display">00:00</span>
+    </div>
+  </header>
+
+  <!-- Video -->
+  <div class="video-area" id="video-area">
+    <video id="webcam" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+
+    <!-- Shown before camera starts -->
+    <div class="no-cam" id="no-cam">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <path d="M15 10l4.55-2.56A1 1 0 0121 8.43v7.14a1 1 0 01-1.45.89L15 14"/>
+        <rect x="1" y="6" width="14" height="12" rx="2"/>
+      </svg>
+      <p>Camera access required for stress detection</p>
+      <button class="btn-start" id="btn-start" onclick="startCamera()">Enable Camera</button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+
+    <!-- Stress badge -->
+    <div class="stress-badge calm" id="stress-badge">
+      <div class="badge-label">Stress Level</div>
+      <div class="badge-level" id="badge-level">CALM</div>
+      <div class="badge-score" id="badge-score">Score: 0.000</div>
+    </div>
+
+    <div class="no-face-hint" id="no-face-hint">⚠ No face detected</div>
+
+    <!-- Status -->
+    <div class="status-row">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Camera off</span>
+    </div>
+
+    <!-- Metrics -->
+    <div>
+      <div class="section-title">Facial Metrics</div>
+      <div class="metric-list" id="metric-list">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    <!-- History chart -->
+    <div class="chart-card">
+      <div class="section-title" style="margin-bottom:10px">Stress Score History</div>
+      <canvas id="history-chart"></canvas>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--calm)"></div>Calm</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--mild)"></div>Mild</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--high)"></div>High</div>
+    </div>
+
+  </aside>
+</div>
+
+<script>
+/* ── Constants ───────────────────────────────────────────────────────────── */
+const METRICS_CONFIG = [
+  { key: 'eyebrow_raise', label: 'Eyebrow Raise', max: 0.20 },
+  { key: 'lip_tension',   label: 'Lip Tension',   max: 1.00 },
+  { key: 'head_nod',      label: 'Head Nod',       max: 0.50 },
+  { key: 'symmetry',      label: 'Symmetry',       max: 0.20 },
+  { key: 'blink_rate',    label: 'Blink Rate/min', max: 30.0 },
+];
+const HISTORY_POINTS = 60;
+const ANALYZE_INTERVAL_MS = 200; // 5 fps to server
+
+/* ── State ───────────────────────────────────────────────────────────────── */
+let sessionStart   = null;
+let timerInterval  = null;
+let analyzeTimer   = null;
+let lastStressLevel = 'Calm';
+let lastStressTime  = 0;
+let historyData     = Array(HISTORY_POINTS).fill(0);
+
+/* ── DOM refs ────────────────────────────────────────────────────────────── */
+const webcamEl    = document.getElementById('webcam');
+const overlayEl   = document.getElementById('overlay');
+const noCamEl     = document.getElementById('no-cam');
+const badgeEl     = document.getElementById('stress-badge');
+const badgeLvlEl  = document.getElementById('badge-level');
+const badgeScrEl  = document.getElementById('badge-score');
+const noFaceEl    = document.getElementById('no-face-hint');
+const statusDot   = document.getElementById('status-dot');
+const statusText  = document.getElementById('status-text');
+const videoArea   = document.getElementById('video-area');
+
+/* ── Build metric bars ───────────────────────────────────────────────────── */
+const metricList = document.getElementById('metric-list');
+const barFills   = {};
+const barValues  = {};
+METRICS_CONFIG.forEach(m => {
+  const row = document.createElement('div');
+  row.className = 'metric-row';
+  row.innerHTML = `
+    <div class="metric-header">
+      <span class="metric-name">${m.label}</span>
+      <span class="metric-value" id="val-${m.key}">0.000</span>
+    </div>
+    <div class="bar-track"><div class="bar-fill calm-color" id="bar-${m.key}"></div></div>
+  `;
+  metricList.appendChild(row);
+  barFills[m.key]  = document.getElementById(`bar-${m.key}`);
+  barValues[m.key] = document.getElementById(`val-${m.key}`);
+});
+
+/* ── Chart.js history ────────────────────────────────────────────────────── */
+const ctx = document.getElementById('history-chart').getContext('2d');
+const chart = new Chart(ctx, {
+  type: 'line',
+  data: {
+    labels: Array(HISTORY_POINTS).fill(''),
+    datasets: [{
+      data: historyData,
+      borderColor: '#6366f1',
+      borderWidth: 2,
+      pointRadius: 0,
+      fill: true,
+      backgroundColor: 'rgba(99,102,241,.15)',
+      tension: 0.4,
+    }]
+  },
+  options: {
+    responsive: true,
+    animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { display: false },
+      y: { min: 0, max: 1, display: false },
+    }
+  }
+});
+
+/* ── Session timer ───────────────────────────────────────────────────────── */
+function startTimer() {
+  sessionStart  = Date.now();
+  timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - sessionStart) / 1000);
+    const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+    const s = String(elapsed % 60).padStart(2, '0');
+    document.getElementById('timer-display').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+/* ── Camera ──────────────────────────────────────────────────────────────── */
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    webcamEl.srcObject = stream;
+    await new Promise(r => webcamEl.onloadedmetadata = r);
+    noCamEl.style.display = 'none';
+    statusDot.className   = 'status-dot live';
+    statusText.textContent = 'Detecting…';
+    startTimer();
+    analyzeTimer = setInterval(analyzeFrame, ANALYZE_INTERVAL_MS);
+  } catch (err) {
+    statusDot.className    = 'status-dot error';
+    statusText.textContent = 'Camera error: ' + err.message;
+  }
+}
+
+/* ── Capture frame → base64 ──────────────────────────────────────────────── */
+function captureFrame() {
+  const { videoWidth: w, videoHeight: h } = webcamEl;
+  if (!w || !h) return null;
+  const tmpCanvas = document.createElement('canvas');
+  tmpCanvas.width  = Math.min(w, 640); // cap at 640px wide for perf
+  tmpCanvas.height = Math.round(h * (tmpCanvas.width / w));
+  tmpCanvas.getContext('2d').drawImage(webcamEl, 0, 0, tmpCanvas.width, tmpCanvas.height);
+  return tmpCanvas.toDataURL('image/jpeg', 0.7);
+}
+
+/* ── Draw landmark dots on overlay ──────────────────────────────────────── */
+function drawLandmarks(landmarks) {
+  const ctx2 = overlayEl.getContext('2d');
+  overlayEl.width  = overlayEl.offsetWidth;
+  overlayEl.height = overlayEl.offsetHeight;
+  ctx2.clearRect(0, 0, overlayEl.width, overlayEl.height);
+  if (!landmarks || !landmarks.length) return;
+  ctx2.fillStyle = '#00e5ff';
+  ctx2.shadowBlur  = 6;
+  ctx2.shadowColor = '#00e5ff';
+  landmarks.forEach(({ x, y }) => {
+    const px = x * overlayEl.width;
+    const py = y * overlayEl.height;
+    ctx2.beginPath();
+    ctx2.arc(px, py, 4, 0, Math.PI * 2);
+    ctx2.fill();
+  });
+}
+
+/* ── Update UI ───────────────────────────────────────────────────────────── */
+function setStressLevel(level, score, faceDetected) {
+  noFaceEl.classList.toggle('visible', !faceDetected);
+
+  // 5-second persistence of stress level
+  const now = Date.now() / 1000;
+  if (faceDetected) {
+    if (level !== lastStressLevel) {
+      lastStressLevel = level;
+      lastStressTime  = now;
+    }
+  }
+  const displayLevel = (faceDetected && (now - lastStressTime < 5))
+    ? lastStressLevel
+    : (faceDetected ? level : 'Calm');
+
+  badgeEl.className   = `stress-badge ${displayLevel.toLowerCase()}`;
+  badgeLvlEl.textContent = displayLevel.toUpperCase();
+  badgeScrEl.textContent = `Score: ${score.toFixed(3)}`;
+
+  // Video border
+  videoArea.className = 'video-area';
+  if (displayLevel === 'High') videoArea.classList.add('stress-high');
+  if (displayLevel === 'Mild') videoArea.classList.add('stress-mild');
+}
+
+function updateMetrics(data) {
+  METRICS_CONFIG.forEach(({ key, max }) => {
+    const val  = data[key] ?? 0;
+    const frac = Math.min(val / max, 1.0);
+    const pct  = (frac * 100).toFixed(1) + '%';
+    barFills[key].style.width = pct;
+    // Color the bar
+    barFills[key].className = 'bar-fill ' +
+      (frac > 0.7 ? 'high-color' : frac > 0.4 ? 'mild-color' : 'calm-color');
+    barValues[key].textContent = key === 'blink_rate'
+      ? val.toFixed(1)
+      : val.toFixed(3);
+  });
+}
+
+function updateHistory(score) {
+  historyData.push(score);
+  if (historyData.length > HISTORY_POINTS) historyData.shift();
+  chart.data.datasets[0].data = [...historyData];
+  chart.update('none');
+}
+
+/* ── Main analysis loop ──────────────────────────────────────────────────── */
+async function analyzeFrame() {
+  const b64 = captureFrame();
+  if (!b64) return;
+
+  try {
+    const res = await fetch('/analyze', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ image: b64 }),
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+
+    setStressLevel(data.stress_level, data.score, data.face_detected);
+    updateMetrics(data);
+    updateHistory(data.score);
+    drawLandmarks(data.face_detected ? data.landmarks : []);
+  } catch (_) {
+    // Network or server error — silently skip frame
+  }
+}
+
+/* ── Auto-start if browser already granted camera permission ─────────────── */
+navigator.permissions?.query({ name: 'camera' }).then(p => {
+  if (p.state === 'granted') startCamera();
+});
+</script>
+</body>
+</html>
