@@ -13,7 +13,10 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from PIL import Image
 
-from detector import StressDetector
+try:
+    from app.detector import StressDetector
+except ImportError:
+    from detector import StressDetector
 
 # ── App setup ─────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
