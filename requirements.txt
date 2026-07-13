@@ -1,4 +1,7 @@
 # Requirements for Real-Time Stress Detection (Web App)
+# NOTE: opencv-python-headless is installed FIRST in Dockerfile before this list
+# to prevent mediapipe from pulling in the GUI version that needs libGL.
+
 flask==3.0.3
 flask-cors==4.0.1
 gunicorn==22.0.0

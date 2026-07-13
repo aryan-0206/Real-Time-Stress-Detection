@@ -4,4 +4,6 @@ services:
     runtime: docker
     healthCheckPath: /health
     autoDeploy: true
-
+    envVars:
+      - key: PORT
+        value: 10000

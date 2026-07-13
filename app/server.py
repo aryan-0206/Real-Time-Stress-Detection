@@ -4,6 +4,7 @@ Accepts base64-encoded webcam frames, runs MediaPipe analysis, returns JSON.
 """
 
 import os
+import sys
 import base64
 import io
 import logging
@@ -13,25 +14,32 @@ from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from PIL import Image
 
-try:
-    from app.detector import StressDetector
-except ImportError:
-    from detector import StressDetector
-
 # ── App setup ─────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = Flask(__name__, template_folder="templates")
+# Resolve template directory relative to this file (works in all run modes)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__, template_folder=os.path.join(_HERE, "templates"))
 CORS(app)
 
-# Initialise the detector once at startup (loads the model)
+# ── Import detector (works whether run as `python app/server.py` or `gunicorn app.server:app`) ──
+try:
+    from app.detector import StressDetector        # gunicorn from project root
+except ImportError:
+    from detector import StressDetector            # direct python execution
+
+# ── Load model at startup ─────────────────────────────────────────────────────
 logger.info("Loading StressDetector model…")
-detector = StressDetector()
-logger.info("StressDetector ready.")
+try:
+    detector = StressDetector()
+    logger.info("StressDetector ready.")
+except Exception as exc:
+    logger.error("FATAL: Could not load StressDetector: %s", exc, exc_info=True)
+    sys.exit(1)
 
 
-# ── Routes ─────────────────────────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -78,9 +86,8 @@ def analyze():
     return jsonify(result)
 
 
-# ── Entry point ────────────────────────────────────────────────────────────────
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    # debug=False is important for production; Render uses gunicorn anyway
     app.run(host="0.0.0.0", port=port, debug=False)
