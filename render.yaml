@@ -1,9 +1,14 @@
 services:
   - type: web
     name: real-time-stress-detection
-    runtime: docker
+    runtime: python
+    # Install opencv-python-headless FIRST so mediapipe doesn't pull in
+    # the GUI version that requires libGL (not available on Render Python envs)
+    buildCommand: pip install opencv-python-headless && pip install -r requirements.txt
+    # Must bind to 0.0.0.0:$PORT — Render injects $PORT dynamically
+    startCommand: gunicorn app.server:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120 --log-level info --access-logfile -
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
     healthCheckPath: /health
     autoDeploy: true
-    envVars:
-      - key: PORT
-        value: 10000
