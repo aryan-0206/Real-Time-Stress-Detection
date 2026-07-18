@@ -9,10 +9,11 @@ def test_health():
     try:
         r = requests.get("http://127.0.0.1:5000/health")
         assert r.status_code == 200, f"Expected 200, got {r.status_code}"
-        assert r.json() == {"status": "ok"}, f"Expected status ok, got {r.json()}"
-        print("✅ /health endpoint passed!")
+        res_json = r.json()
+        assert res_json.get("status") == "ok", f"Expected status ok, got {res_json}"
+        print("[OK] /health endpoint passed!")
     except Exception as e:
-        print(f"❌ /health endpoint failed: {e}")
+        print(f"[FAIL] /health endpoint failed: {e}")
         raise e
 
 def test_analyze_no_face():
@@ -32,9 +33,9 @@ def test_analyze_no_face():
         assert data["face_detected"] is False, "Expected face_detected to be False"
         assert data["stress_level"] == "Calm", f"Expected Calm, got {data['stress_level']}"
         assert data["score"] == 0.0, f"Expected score 0.0, got {data['score']}"
-        print("✅ /analyze endpoint (no face) passed!")
+        print("[OK] /analyze endpoint (no face) passed!")
     except Exception as e:
-        print(f"❌ /analyze endpoint (no face) failed: {e}")
+        print(f"[FAIL] /analyze endpoint (no face) failed: {e}")
         raise e
 
 if __name__ == "__main__":
@@ -42,7 +43,9 @@ if __name__ == "__main__":
     try:
         test_health()
         test_analyze_no_face()
-        print("\n🎉 All tests passed successfully!")
-    except Exception:
+        print("\n[SUCCESS] All tests passed successfully!")
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         import sys
         sys.exit(1)

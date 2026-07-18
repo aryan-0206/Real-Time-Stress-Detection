@@ -37,9 +37,12 @@ class StressDetector:
                 "face_landmarker/face_landmarker/float16/1/face_landmarker.task"
             )
         print(f"[StressDetector] Loading model from: {model_path}")
+        with open(model_path, "rb") as f:
+            model_data = f.read()
+
         self.face_landmarker = FaceLandmarker.create_from_options(
             FaceLandmarkerOptions(
-                base_options=base_options.BaseOptions(model_asset_path=model_path),
+                base_options=base_options.BaseOptions(model_asset_buffer=model_data),
                 running_mode=VisionTaskRunningMode.IMAGE,
                 output_face_blendshapes=False,
                 output_facial_transformation_matrixes=False,

@@ -24,6 +24,8 @@ COPY . .
 # Render sets the PORT environment variable — bind gunicorn to it
 # Default to 10000 for local Docker testing (matches Render's Docker default)
 ENV PORT=10000
+EXPOSE 10000
+
 
 # Start gunicorn server bound to the dynamic PORT
 # --access-logfile - streams access logs to stdout (visible in Render dashboard)
