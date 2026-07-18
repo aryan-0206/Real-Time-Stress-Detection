@@ -367,11 +367,11 @@ const HISTORY_POINTS = 60;
 const ANALYZE_INTERVAL_MS = 200; // 5 fps to server
 
 /* ── State ───────────────────────────────────────────────────────────────── */
-let sessionStart   = null;
-let timerInterval  = null;
-let analyzeTimer   = null;
+let sessionStart    = null;
+let timerInterval   = null;
+let analyzeTimer    = null;
 let lastStressLevel = 'Calm';
-let lastStressTime  = 0;
+let lastStressTime  = Date.now() / 1000;  // BUG FIX: was 0, causing persistence to never activate on first detection
 let historyData     = Array(HISTORY_POINTS).fill(0);
 
 /* ── DOM refs ────────────────────────────────────────────────────────────── */
@@ -474,8 +474,14 @@ function captureFrame() {
 /* ── Draw landmark dots on overlay ──────────────────────────────────────── */
 function drawLandmarks(landmarks) {
   const ctx2 = overlayEl.getContext('2d');
-  overlayEl.width  = overlayEl.offsetWidth;
-  overlayEl.height = overlayEl.offsetHeight;
+  // BUG FIX: only resize canvas when dimensions actually change — avoids
+  // clearing the canvas on every frame which caused landmark flickering.
+  const newW = overlayEl.offsetWidth;
+  const newH = overlayEl.offsetHeight;
+  if (overlayEl.width !== newW || overlayEl.height !== newH) {
+    overlayEl.width  = newW;
+    overlayEl.height = newH;
+  }
   ctx2.clearRect(0, 0, overlayEl.width, overlayEl.height);
   if (!landmarks || !landmarks.length) return;
   ctx2.fillStyle = '#00e5ff';

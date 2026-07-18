@@ -1,11 +1,9 @@
 services:
   - type: web
     name: real-time-stress-detection
-    runtime: python
-    buildCommand: pip install opencv-python-headless && pip install -r requirements.txt
-    startCommand: gunicorn app.server:app --workers 1 --threads 2 --timeout 120
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.0
+    runtime: docker
     healthCheckPath: /health
     autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 10000

@@ -22,8 +22,15 @@ RUN pip install --no-cache-dir opencv-python-headless && \
 COPY . .
 
 # Render sets the PORT environment variable — bind gunicorn to it
-# Default to 5000 for local testing
-ENV PORT=5000
+# Default to 10000 for local Docker testing (matches Render's Docker default)
+ENV PORT=10000
 
 # Start gunicorn server bound to the dynamic PORT
-CMD gunicorn app.server:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 120
+# --access-logfile - streams access logs to stdout (visible in Render dashboard)
+CMD gunicorn app.server:app \
+    --bind 0.0.0.0:$PORT \
+    --workers 1 \
+    --threads 2 \
+    --timeout 120 \
+    --log-level info \
+    --access-logfile -
